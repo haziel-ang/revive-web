@@ -6,11 +6,6 @@ for (const canvas of document.querySelectorAll('.art')) {
   ctx.strokeStyle = '#62acaa';
   ctx.lineWidth = 1.3;
   const pi = Math.PI;
-  function path(points) {
-    ctx.beginPath();
-    points.forEach(([x,y], i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
-    ctx.stroke();
-  }
   for (let y=-154;y<160;y+=20) {
     for (let x=-290;x<300;x+=20) {
       ctx.fillStyle = 'rgba(162,222,209,.25)';
@@ -45,11 +40,6 @@ for (const canvas of document.querySelectorAll('.art')) {
     }
     for (const [x,y] of stations) {
       ctx.fillStyle='#c7ffe8';ctx.beginPath();ctx.arc(x,y,5,0,2*pi);ctx.fill();
-    }
-  } else if(canvas.dataset.art==='shield') {
-    for(let i=1;i<=9;i++){
-      const r=i*14;
-      path([[0,-r],[r*.84,-r*.66],[r*.78,r*.22],[r*.55,r*.65],[0,r],[-r*.55,r*.65],[-r*.78,r*.22],[-r*.84,-r*.66],[0,-r]]);
     }
   } else {
     for(let i=1;i<=13;i++){

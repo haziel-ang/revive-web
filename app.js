@@ -1,7 +1,7 @@
 'use strict';
 const el = id => document.getElementById(id);
 function route() {
-  const page = ['hardening', 'integrita'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'osint';
+  const page = ['username', 'grafo', 'https', 'integrita'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'osint';
   document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== page);
   document.querySelectorAll('nav a').forEach(a => {
     if (a.hash === '#' + page) a.setAttribute('aria-current', 'page');
@@ -17,7 +17,7 @@ route();
 
 const service = el('service'), target = el('target'), results = el('results');
 const modes = {
-  domain: ['Dominio', 'esempio.it'], dns: ['Nome DNS', 'example.org'],
+  geo: ['Indirizzo IP', '8.8.8.8'], ct: ['Dominio', 'example.org'], network: ['Indirizzo IP', '8.8.8.8'], ptr: ['Indirizzo IP', '8.8.8.8'], domain: ['Dominio', 'esempio.it'], dns: ['Nome DNS', 'example.org'],
   ip: ['Indirizzo IPv4 o IPv6', '2001:4860:4860::8888'], asn: ['Numero AS', 'AS15169']
 };
 let active;
@@ -30,7 +30,7 @@ function resetQuery() {
   el('recordLabel').hidden = mode !== 'dns';
   el('targetLabel').textContent = modes[mode][0];
   target.placeholder = mode === 'dns' && el('record').value === 'PTR' ? '8.8.8.8.in-addr.arpa' : modes[mode][1];
-  el('provider').textContent = mode === 'dns' ? 'Consulta invia il nome a Google Public DNS.' : 'Consulta invia il valore a RDAP.org e al registro competente.';
+  el('provider').textContent = mode === 'geo' ? 'Consulta invia l’indirizzo a Country.is.' : mode === 'ct' ? 'Consulta invia il dominio a Cert Spotter.' : mode === 'network' ? 'Consulta invia l’indirizzo a RIPEstat.' : mode === 'ptr' ? 'Consulta invia il nome inverso a Google Public DNS.' : mode === 'dns' ? 'Consulta invia il nome a Google Public DNS.' : 'Consulta invia il valore a RDAP.org e al registro competente.';
 }
 service.onchange = resetQuery;
 el('record').onchange = resetQuery;
@@ -44,7 +44,19 @@ function address(input) {
 }
 function endpoint(mode, raw) {
   let value = raw.trim();
-  if (mode === 'ip') value = address(value);
+  if (['ip','network','ptr','geo'].includes(mode)) value = address(value);
+  if (mode === 'geo') return 'https://api.country.is/' + encodeURIComponent(value);
+  if (mode === 'network') return 'https://stat.ripe.net/data/network-info/data.json?resource=' + encodeURIComponent(value);
+  if (mode === 'ptr') {
+    let reverse;
+    if (value.includes(':')) {
+      const [left,right] = value.split('::').map(part => part ? part.split(':') : []);
+      const groups = right ? [...left,...Array(8-left.length-right.length).fill('0'),...right] : left;
+      reverse = groups.map(part => part.padStart(4,'0')).join('').split('').reverse().join('.') + '.ip6.arpa';
+    } else reverse = value.split('.').reverse().join('.') + '.in-addr.arpa';
+    return 'https://dns.google/resolve?' + new URLSearchParams({name:reverse,type:'PTR'});
+  }
+  if (mode === 'ip') return 'https://rdap.org/ip/' + encodeURIComponent(value);
   else if (mode === 'asn') {
     value = value.replace(/^AS/i, '');
     if (!/^\d{1,10}$/.test(value) || +value > 4294967295) throw Error('Inserisci un numero AS tra 0 e 4294967295.');
@@ -57,6 +69,7 @@ function endpoint(mode, raw) {
     if (!host || host.length > 253 || !host.includes('.') || !host.split('.').every(s => label.test(s)) || /^\d+$/.test(host.split('.').pop())) throw Error('Verifica il nome di dominio inserito.');
     value = host;
   }
+  if (mode === 'ct') return 'https://api.certspotter.com/v1/issuances?' + new URLSearchParams({domain:value,expand:'dns_names'});
   if (mode === 'dns') return 'https://dns.google/resolve?' + new URLSearchParams({name:value, type:el('record').value});
   return 'https://rdap.org/' + (mode === 'asn' ? 'autnum' : mode) + '/' + encodeURIComponent(value);
 }
@@ -78,6 +91,20 @@ el('lookup').onsubmit = async event => {
   const link = node('a', 'Apri la risposta del servizio');
   link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
   results.append(link);
+  if (mode === 'geo') {
+    const credit=node('a','IP Geolocation by Country.is'); credit.href='https://country.is/';
+    results.append(node('br',''),credit);
+  }
+  if (mode === 'domain') {
+    const guide=node('a','Verifica TLS e intestazioni HTTP');
+    guide.href='#https'; results.append(node('br',''),guide);
+    el('httpsDomain').value=decodeURIComponent(url.split('/').pop());
+  }
+  if (mode === 'ct') {
+    const alternate = node('a','Consulta lo storico su crt.sh');
+    alternate.href = 'https://crt.sh/?' + new URLSearchParams({q:new URL(url).searchParams.get('domain')});
+    alternate.target='_blank'; alternate.rel='noopener noreferrer'; results.append(node('br',''),alternate);
+  }
   el('status').textContent = 'Consultazione in corso…';
   try {
     const response = await fetch(url, {signal:controller.signal, credentials:'omit', referrerPolicy:'no-referrer'});
@@ -86,7 +113,17 @@ el('lookup').onsubmit = async event => {
     if (active !== controller) return;
     const list = document.createElement('dl');
     function field(key, val) {if (val !== undefined && val !== null && val !== '') list.append(node('dt',key),node('dd',String(val)));}
-    if (mode === 'dns') {
+    if (mode === 'geo') {
+      if (!data.country || data.error) throw Error('Geolocalizzazione non disponibile.');
+      field('Paese',data.country);
+
+    } else if (mode === 'network') {
+      if (data.status !== 'ok') throw Error('RIPEstat non ha restituito i dati di rete.');
+      field('Prefisso',data.data.prefix); field('Sistemi autonomi',data.data.asns.join(', '));
+    } else if (mode === 'ct') {
+      if (!Array.isArray(data)) throw Error('Risposta CT inattesa.');
+      for (const cert of data) field(cert.dns_names.join(', '), 'Scadenza ' + cert.not_after);
+    } else if (mode === 'ptr' || mode === 'dns') {
       if (data.Status !== 0) throw Error(data.Status === 3 ? 'Il nome DNS non esiste (NXDOMAIN).' : 'Errore del resolver DNS, codice ' + data.Status + '.');
       for (const row of data.Answer || []) field(row.name + ' · TTL ' + row.TTL, row.data);
     } else {
@@ -94,6 +131,12 @@ el('lookup').onsubmit = async event => {
       field('Paese del registro', data.country); field('Inizio intervallo', data.startAddress ?? data.startAutnum);
       field('Fine intervallo', data.endAddress ?? data.endAutnum);
       for (const entry of data.events || []) field(entry.eventAction, entry.eventDate);
+      if (data.status?.length) field('Stato',data.status.join(', '));
+      if (typeof data.secureDNS?.delegationSigned === 'boolean') field('DNSSEC', String(data.secureDNS.delegationSigned));
+      for (const entity of data.entities || []) {
+        const display = entity.vcardArray?.[1]?.find(row=>row[0]==='fn')?.[3];
+        if(display) field((entity.roles || []).join(', ') || 'RDAP',display);
+      }
       for (const ns of data.nameservers || []) field('Nameserver', ns.ldhName);
     }
     const details = document.createElement('details');
@@ -105,29 +148,6 @@ el('lookup').onsubmit = async event => {
   } finally {clearTimeout(timer);}
 };
 
-const checklist = [
-  ['defender','Microsoft Defender','In Sicurezza di Windows apri Protezione da virus e minacce e verifica la protezione in tempo reale.'],
-  ['firewall','Firewall','In Sicurezza di Windows apri Firewall e protezione rete e verifica il profilo attivo.'],
-  ['bitlocker','Crittografia del dispositivo','Cerca BitLocker o Crittografia dispositivo nelle impostazioni e verifica lo stato del disco di sistema.'],
-  ['update','Windows Update','Apri Windows Update e controlla la data dell’ultima verifica e gli eventuali riavvii in sospeso.'],
-  ['clipboard','Appunti sincronizzati','In Impostazioni, Sistema, Appunti verifica se la sincronizzazione fra dispositivi è adatta al tuo utilizzo.'],
-  ['privacy','Preferenze di privacy','Nelle impostazioni privacy rivedi l’ID annunci e l’uso facoltativo dei dati di diagnostica.']
-];
-function progress() {
-  const checked = el('checks').querySelectorAll(':checked').length;
-  el('meter').max = checklist.length;
-  el('meter').value = checked;
-  el('progress').textContent = checked + ' di ' + checklist.length + ' controlli verificati.';
-}
-for (const [key,title,hint] of checklist) {
-  const label = node('label',''), box = node('input',''), caption = node('span',title);
-  label.className = 'check'; box.type = 'checkbox';
-  const storageKey = 'revive.check.' + key;
-  try {box.checked = localStorage.getItem(storageKey) === '1';} catch {}
-  box.onchange = () => {progress(); try {localStorage.setItem(storageKey, box.checked ? '1' : '0');} catch {el('progress').append(' Salvataggio locale non disponibile.');}};
-  caption.append(node('small',hint)); label.append(box,caption); el('checks').append(label);
-}
-progress();
 const hashForm = el('hashForm');
 let hashVersion = 0;
 hashForm.oninput = () => {hashVersion++; el('digest').textContent = '';};
@@ -143,4 +163,21 @@ hashForm.onsubmit = async event => {
     const hash = Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2,'0')).join('');
     if (version === hashVersion) el('digest').textContent = (expected ? (expected === hash ? 'Impronta corrispondente. ' : 'Impronta diversa. ') : '') + hash;
   } catch {if (version === hashVersion) el('digest').textContent = 'Lettura del file non riuscita.';}
+};
+el('httpsForm').onsubmit=event=>{
+  event.preventDefault();
+  try {
+    const domain=endpoint('domain',el('httpsDomain').value).split('/').pop();
+    el('httpsStatus').textContent='';
+    window.open('https://'+decodeURIComponent(domain)+'/','_blank','noopener,noreferrer');
+  } catch(error){el('httpsStatus').textContent=error.message;}
+};
+el('headersForm').onsubmit=event=>{
+  event.preventDefault();
+  const list=el('headerRows');list.replaceChildren();
+  for(const line of el('headersInput').value.split(/\r?\n/)){
+    const match=/^([a-z0-9!#$%&'*+.^_\x60|~-]+):[ \t]*(.*)$/i.exec(line);
+    if(match) list.append(node('dt',match[1]),node('dd',match[2]));
+  }
+  el('headersStatus').textContent=list.childElementCount?'Intestazioni lette.':'Nessuna intestazione riconosciuta.';
 };

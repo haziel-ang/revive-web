@@ -53,3 +53,19 @@ footer a {display:flex;align-items:center;gap:.4rem;color:inherit;text-decoratio
 @media(max-width:740px){.bar,.shell{width:calc(100% - 32px)}.columns{grid-template-columns:1fr;gap:14px;margin-top:14px}.hero{min-height:180px}.hero>div{width:75%}.art{width:30%;opacity:.6}.bar{height:62px}nav{padding:14px 0;gap:.15rem}nav a{padding:.63rem .7rem}}
 @media(max-width:470px){.hero{align-items:end;padding:24px 18px;min-height:162px}.hero>div{width:100%}.hero p{max-width:32ch}.art{right:-24%;width:65%;opacity:.13}.row{flex-wrap:wrap}nav a{font-size:.84rem;gap:.35rem}.bar,.shell{width:calc(100% - 24px)}nav .icon{width:16px}h2{font-size:1.12rem}}
 @media(max-width:350px){nav a{padding:.6rem .45rem}}
+
+.preferences,.graph #caseActions {display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.lang select {margin:0;min-height:36px;width:auto;padding:.25rem}
+nav {flex-wrap:wrap}
+#drawing {overflow:auto;max-height:30rem;margin:1rem 0;background:var(--well)}
+.graph {margin:1rem 0 2rem}
+.graph button,#compareCases,#profileGraph {border:1px solid var(--field);background:var(--well);color:var(--ink);border-radius:7px;padding:.5rem .7rem;margin:.5rem .25rem .25rem 0}
+button:disabled {opacity:.55}
+#profileForm label+label,#grafo label+label {margin-top:.9rem}
+#edges {overflow-wrap:anywhere}
+.guide {padding-top:2.5rem;max-width:920px}
+.guide nav {border-bottom:1px solid var(--line);margin-bottom:1.2rem}
+.guide article {margin:1rem 0;scroll-margin:1rem}
+.guide article p {max-width:75ch}
+textarea {width:100%;display:block;padding:.7rem;margin:.4rem 0;font:inherit;color:var(--ink);background:var(--well);border:1px solid var(--field);border-radius:8px;resize:vertical}
+#headerRows {overflow-wrap:anywhere}
