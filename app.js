@@ -8,6 +8,10 @@ function route() {
     else a.removeAttribute('aria-current');
   });
 }
+document.querySelector('.skip').addEventListener('click', event => {
+  event.preventDefault();
+  el('workspace').focus();
+});
 window.addEventListener('hashchange', route);
 route();
 
@@ -109,7 +113,12 @@ const checklist = [
   ['clipboard','Appunti sincronizzati','In Impostazioni, Sistema, Appunti verifica se la sincronizzazione fra dispositivi è adatta al tuo utilizzo.'],
   ['privacy','Preferenze di privacy','Nelle impostazioni privacy rivedi l’ID annunci e l’uso facoltativo dei dati di diagnostica.']
 ];
-function progress(){el('progress').textContent = el('checks').querySelectorAll(':checked').length + ' di ' + checklist.length + ' controlli verificati.';}
+function progress() {
+  const checked = el('checks').querySelectorAll(':checked').length;
+  el('meter').max = checklist.length;
+  el('meter').value = checked;
+  el('progress').textContent = checked + ' di ' + checklist.length + ' controlli verificati.';
+}
 for (const [key,title,hint] of checklist) {
   const label = node('label',''), box = node('input',''), caption = node('span',title);
   label.className = 'check'; box.type = 'checkbox';
